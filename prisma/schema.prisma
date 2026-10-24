@@ -1,0 +1,89 @@
+// Prisma schema – "מה עושים היום?"
+// שתי טבלאות: משתמשים (User) ופעילויות (Activity)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// סוג משתמש: הורה או ילד
+enum Role {
+  PARENT
+  CHILD
+}
+
+/// קטגוריית פעילות: יצירה / משחק / תנועה / חשיבה / מטבח
+enum Category {
+  CRAFT
+  GAME
+  MOVEMENT
+  THINKING
+  KITCHEN
+}
+
+/// מקום: בבית / בחוץ
+enum Location {
+  HOME
+  OUTDOOR
+}
+
+/// עלות: חינם / בתשלום
+enum Cost {
+  FREE
+  PAID
+}
+
+/// סטטוס: ממתין לאישור / מאושר
+enum ActivityStatus {
+  PENDING
+  APPROVED
+}
+
+/// משתמשי המערכת. ילד מקושר להורה שלו דרך parentId.
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique @db.VarChar(30)
+  passwordHash String
+  displayName  String   @db.VarChar(50)
+  role         Role
+  parentId     Int?
+  createdAt    DateTime @default(now())
+
+  parent            User?      @relation("ParentChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children          User[]     @relation("ParentChildren")
+  createdActivities Activity[] @relation("ActivityCreator")
+  familyActivities  Activity[] @relation("ActivityFamily")
+
+  @@index([parentId])
+}
+
+/// רעיון לפעילות פנאי
+model Activity {
+  id              Int            @id @default(autoincrement())
+  title           String         @db.VarChar(100)
+  description     String         @db.VarChar(2000)
+  category        Category
+  location        Location
+  minAge          Int
+  maxAge          Int
+  durationMinutes Int
+  cost            Cost
+  isPublic        Boolean        @default(false)
+  status          ActivityStatus @default(PENDING)
+  createdById     Int
+  /// מזהה ההורה של המשפחה (ההורה עצמו, או ההורה של הילד שהוסיף)
+  familyId        Int
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  createdBy User @relation("ActivityCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  family    User @relation("ActivityFamily", fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([createdById])
+  @@index([status, isPublic])
+}

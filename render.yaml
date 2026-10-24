@@ -1,0 +1,28 @@
+# הגדרות פריסה ל־Render (Blueprint).
+# אפשר גם ליצור את השירות ידנית לפי START-HERE.md – הערכים שם זהים לאלה.
+services:
+  - type: web
+    name: ma-osim-hayom-api
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
+    # בהפעלה: מריצים Migrations, יוצרים נתוני הדגמה (רק אם SEED_ON_START=true) ומפעילים את השרת
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false # מזינים ידנית ב־Render (כתובת מסד הנתונים)
+      - key: JWT_SECRET
+        generateValue: true # Render יוצר סוד אקראי
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: CORS_ORIGIN
+        sync: false # כתובת אתר ה־React, למשל https://my-app.onrender.com
+      - key: SEED_ON_START
+        value: "false"
+      - key: SEED_DEMO_PASSWORD
+        sync: false

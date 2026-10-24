@@ -1,0 +1,1881 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "מה עושים היום? – API",
+    "version": "1.0.0",
+    "description": "שרת למאגר רעיונות לפעילויות פנאי לילדים.\n\n**איך בודקים מתוך Swagger:**\n1. פתחי את `POST /api/auth/login` ← Try it out ← Execute (משתמשי הדגמה: `parent_demo` / `child_demo`).\n2. העתיקי את הערך של `token` מהתשובה.\n3. לחצי על הכפתור **Authorize** למעלה, הדביקי את ה־Token (בלי המילה Bearer) ולחצי Authorize.\n4. מעכשיו כל הקריאות המוגנות יישלחו עם ה־Token.\n\n**סוגי משתמשים:** `PARENT` (הורה) ו־`CHILD` (ילד). פירוט ההרשאות מופיע בכל Endpoint."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "השרת הנוכחי"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "בדיקת תקינות"
+    },
+    {
+      "name": "Auth",
+      "description": "הרשמה, התחברות ומשתמש מחובר"
+    },
+    {
+      "name": "Activities",
+      "description": "פעילויות פנאי"
+    },
+    {
+      "name": "Users",
+      "description": "משתמשים"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "בדיקה שהשרת ומסד הנתונים פעילים",
+        "description": "לא דורש התחברות.",
+        "responses": {
+          "200": {
+            "description": "השרת פעיל",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "status": "ok",
+                  "database": "ok",
+                  "time": "2026-10-22T10:00:00.000Z"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "אין חיבור למסד הנתונים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "status": "error",
+                  "database": "error",
+                  "time": "2026-10-22T10:00:00.000Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "הרשמה",
+        "description": "יוצר משתמש חדש ומחזיר Token (המשתמש מחובר מיד). לא דורש התחברות.\n\nלילד (`CHILD`) חובה לשלוח `parentUsername` – שם המשתמש של הורה קיים.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterInput"
+              },
+              "examples": {
+                "parent": {
+                  "summary": "הרשמת הורה",
+                  "value": {
+                    "username": "dana_parent",
+                    "password": "secret123",
+                    "displayName": "דנה",
+                    "role": "PARENT"
+                  }
+                },
+                "child": {
+                  "summary": "הרשמת ילד",
+                  "value": {
+                    "username": "noam_kid",
+                    "password": "secret123",
+                    "displayName": "נעם",
+                    "role": "CHILD",
+                    "parentUsername": "dana_parent"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "נרשם בהצלחה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "token",
+                    "user"
+                  ],
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "JWT Access Token"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "user": {
+                    "id": 1,
+                    "username": "dana_parent",
+                    "displayName": "דנה",
+                    "role": "PARENT",
+                    "parentId": null,
+                    "createdAt": "2026-10-22T10:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים, או שההורה לא נמצא",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "PARENT_NOT_FOUND",
+                    "message": "לא נמצא הורה עם שם המשתמש הזה"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "שם המשתמש תפוס",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "USERNAME_TAKEN",
+                    "message": "שם המשתמש כבר תפוס"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "התחברות",
+        "description": "מחזיר JWT Access Token ופרטי משתמש. לא דורש התחברות.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInput"
+              },
+              "examples": {
+                "parent": {
+                  "summary": "הורה לדוגמה",
+                  "value": {
+                    "username": "parent_demo",
+                    "password": "Demo1234"
+                  }
+                },
+                "child": {
+                  "summary": "ילד לדוגמה",
+                  "value": {
+                    "username": "child_demo",
+                    "password": "Demo1234"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "התחברות הצליחה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "token",
+                    "user"
+                  ],
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "JWT Access Token"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "user": {
+                    "id": 1,
+                    "username": "parent_demo",
+                    "displayName": "הורה לדוגמה",
+                    "role": "PARENT",
+                    "parentId": null,
+                    "createdAt": "2026-10-22T10:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "שם משתמש או סיסמה שגויים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "INVALID_CREDENTIALS",
+                    "message": "שם משתמש או סיסמה שגויים"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "פרטי המשתמש המחובר",
+        "description": "דורש Token. לילד מוחזרים גם פרטי ההורה.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "פרטי המשתמש",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/Me"
+                    }
+                  }
+                },
+                "example": {
+                  "user": {
+                    "id": 1,
+                    "username": "parent_demo",
+                    "displayName": "הורה לדוגמה",
+                    "role": "PARENT",
+                    "parentId": null,
+                    "createdAt": "2026-10-22T10:00:00.000Z",
+                    "parent": null
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities": {
+      "get": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "רשימת פעילויות עם חיפוש, סינון ומיון",
+        "description": "דורש Token. מחזיר רק פעילויות שהמשתמש רשאי לראות:\n- פעילויות מאושרות וציבוריות של כולם\n- פעילויות מאושרות של המשפחה שלו\n- רעיונות ממתינים: הורה – של ילדיו, ילד – רק שלו",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "מילה לחיפוש בשם או בתיאור",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "description": "קטגוריה",
+            "schema": {
+              "$ref": "#/components/schemas/Category"
+            }
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "description": "מקום",
+            "schema": {
+              "$ref": "#/components/schemas/Location"
+            }
+          },
+          {
+            "name": "cost",
+            "in": "query",
+            "required": false,
+            "description": "עלות",
+            "schema": {
+              "$ref": "#/components/schemas/Cost"
+            }
+          },
+          {
+            "name": "age",
+            "in": "query",
+            "required": false,
+            "description": "גיל הילד – מחזיר פעילויות שהגיל בטווח שלהן",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 18
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "סטטוס (שימושי להורה: רעיונות ממתינים של ילדיו)",
+            "schema": {
+              "$ref": "#/components/schemas/ActivityStatus"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "שדה למיון",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "duration",
+                "createdAt"
+              ],
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "כיוון המיון",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת הפעילויות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "activities",
+                    "count"
+                  ],
+                  "properties": {
+                    "activities": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Activity"
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "activities": [
+                    {
+                      "id": 7,
+                      "title": "מגדל מקרטונים",
+                      "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                      "category": "CRAFT",
+                      "location": "HOME",
+                      "minAge": 4,
+                      "maxAge": 10,
+                      "durationMinutes": 30,
+                      "cost": "FREE",
+                      "isPublic": true,
+                      "status": "APPROVED",
+                      "familyId": 1,
+                      "createdAt": "2026-10-22T10:00:00.000Z",
+                      "updatedAt": "2026-10-22T10:00:00.000Z",
+                      "createdBy": {
+                        "id": 1,
+                        "displayName": "הורה לדוגמה",
+                        "role": "PARENT"
+                      }
+                    }
+                  ],
+                  "count": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "הוספת פעילות",
+        "description": "דורש Token. הורה: הפעילות מאושרת מיד, ו־`isPublic` קובע אם היא ציבורית.\nילד: הפעילות נשמרת כממתינה לאישור ההורה, ותמיד פרטית (`isPublic` מתעלמים ממנו).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivityInput"
+              },
+              "example": {
+                "title": "מגדל מקרטונים",
+                "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                "category": "CRAFT",
+                "location": "HOME",
+                "minAge": 4,
+                "maxAge": 10,
+                "durationMinutes": 30,
+                "cost": "FREE",
+                "isPublic": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "הפעילות נוספה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "$ref": "#/components/schemas/Activity"
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ]
+                },
+                "example": {
+                  "activity": {
+                    "id": 7,
+                    "title": "מגדל מקרטונים",
+                    "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                    "category": "CRAFT",
+                    "location": "HOME",
+                    "minAge": 4,
+                    "maxAge": 10,
+                    "durationMinutes": 30,
+                    "cost": "FREE",
+                    "isPublic": true,
+                    "status": "APPROVED",
+                    "familyId": 1,
+                    "createdAt": "2026-10-22T10:00:00.000Z",
+                    "updatedAt": "2026-10-22T10:00:00.000Z",
+                    "createdBy": {
+                      "id": 1,
+                      "displayName": "הורה לדוגמה",
+                      "role": "PARENT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/random": {
+      "get": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "הגרלת פעילות",
+        "description": "דורש Token. מגריל פעילות אחת מתוך הפעילויות שהמשתמש רשאי לראות, לפי אותם סינונים של הרשימה.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "מילה לחיפוש בשם או בתיאור",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "description": "קטגוריה",
+            "schema": {
+              "$ref": "#/components/schemas/Category"
+            }
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "description": "מקום",
+            "schema": {
+              "$ref": "#/components/schemas/Location"
+            }
+          },
+          {
+            "name": "cost",
+            "in": "query",
+            "required": false,
+            "description": "עלות",
+            "schema": {
+              "$ref": "#/components/schemas/Cost"
+            }
+          },
+          {
+            "name": "age",
+            "in": "query",
+            "required": false,
+            "description": "גיל הילד – מחזיר פעילויות שהגיל בטווח שלהן",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 18
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "סטטוס (שימושי להורה: רעיונות ממתינים של ילדיו)",
+            "schema": {
+              "$ref": "#/components/schemas/ActivityStatus"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "שדה למיון",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "duration",
+                "createdAt"
+              ],
+              "default": "createdAt"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "כיוון המיון",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "פעילות אקראית",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "$ref": "#/components/schemas/Activity"
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ]
+                },
+                "example": {
+                  "activity": {
+                    "id": 7,
+                    "title": "מגדל מקרטונים",
+                    "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                    "category": "CRAFT",
+                    "location": "HOME",
+                    "minAge": 4,
+                    "maxAge": 10,
+                    "durationMinutes": 30,
+                    "cost": "FREE",
+                    "isPublic": true,
+                    "status": "APPROVED",
+                    "familyId": 1,
+                    "createdAt": "2026-10-22T10:00:00.000Z",
+                    "updatedAt": "2026-10-22T10:00:00.000Z",
+                    "createdBy": {
+                      "id": 1,
+                      "displayName": "הורה לדוגמה",
+                      "role": "PARENT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "אין פעילויות שמתאימות לסינון",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "לא נמצאו פעילויות שמתאימות לסינון"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}": {
+      "get": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "פעילות אחת",
+        "description": "דורש Token והרשאת צפייה בפעילות (למשל לטופס עריכה).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הפעילות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 7
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "הפעילות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "$ref": "#/components/schemas/Activity"
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ]
+                },
+                "example": {
+                  "activity": {
+                    "id": 7,
+                    "title": "מגדל מקרטונים",
+                    "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                    "category": "CRAFT",
+                    "location": "HOME",
+                    "minAge": 4,
+                    "maxAge": 10,
+                    "durationMinutes": 30,
+                    "cost": "FREE",
+                    "isPublic": true,
+                    "status": "APPROVED",
+                    "familyId": 1,
+                    "createdAt": "2026-10-22T10:00:00.000Z",
+                    "updatedAt": "2026-10-22T10:00:00.000Z",
+                    "createdBy": {
+                      "id": 1,
+                      "displayName": "הורה לדוגמה",
+                      "role": "PARENT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "אין הרשאה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "אין לך הרשאה לבצע פעולה זו"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "לא נמצא",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "הפעילות לא נמצאה"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "עריכת פעילות",
+        "description": "דורש Token. שולחים את כל השדות (כמו בטופס).\n- הורה: יכול לערוך כל פעילות של המשפחה שלו (שלו ושל ילדיו).\n- ילד: יכול לערוך רק רעיון שלו שעדיין ממתין לאישור.\n`isPublic` נלקח בחשבון רק אצל הורה ורק לפעילות מאושרת.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הפעילות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 7
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivityInput"
+              },
+              "example": {
+                "title": "מגדל מקרטונים",
+                "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                "category": "CRAFT",
+                "location": "HOME",
+                "minAge": 4,
+                "maxAge": 10,
+                "durationMinutes": 30,
+                "cost": "FREE",
+                "isPublic": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "הפעילות עודכנה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "$ref": "#/components/schemas/Activity"
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ]
+                },
+                "example": {
+                  "activity": {
+                    "id": 7,
+                    "title": "מגדל מקרטונים",
+                    "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                    "category": "CRAFT",
+                    "location": "HOME",
+                    "minAge": 4,
+                    "maxAge": 10,
+                    "durationMinutes": 30,
+                    "cost": "FREE",
+                    "isPublic": true,
+                    "status": "APPROVED",
+                    "familyId": 1,
+                    "createdAt": "2026-10-22T10:00:00.000Z",
+                    "updatedAt": "2026-10-22T10:00:00.000Z",
+                    "createdBy": {
+                      "id": 1,
+                      "displayName": "הורה לדוגמה",
+                      "role": "PARENT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "אין הרשאה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "אין לך הרשאה לבצע פעולה זו"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "לא נמצא",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "הפעילות לא נמצאה"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "מחיקת פעילות",
+        "description": "דורש Token. אותן הרשאות כמו בעריכה.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הפעילות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 7
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "נמחקה (אין גוף לתשובה)"
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "אין הרשאה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "אין לך הרשאה לבצע פעולה זו"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "לא נמצא",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "הפעילות לא נמצאה"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/approve": {
+      "patch": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "אישור רעיון של ילד",
+        "description": "להורה בלבד, ורק לרעיון של ילד שלו. אפשר לסמן בזמן האישור אם הפעילות ציבורית (ברירת מחדל: פרטית).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הפעילות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 7
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveInput"
+              },
+              "example": {
+                "isPublic": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "הרעיון אושר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "$ref": "#/components/schemas/Activity"
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ]
+                },
+                "example": {
+                  "activity": {
+                    "id": 7,
+                    "title": "מגדל מקרטונים",
+                    "description": "אוספים קופסאות קרטון ריקות ובונים מגדל גבוה ככל האפשר.",
+                    "category": "CRAFT",
+                    "location": "HOME",
+                    "minAge": 4,
+                    "maxAge": 10,
+                    "durationMinutes": 30,
+                    "cost": "FREE",
+                    "isPublic": true,
+                    "status": "APPROVED",
+                    "familyId": 1,
+                    "createdAt": "2026-10-22T10:00:00.000Z",
+                    "updatedAt": "2026-10-22T10:00:00.000Z",
+                    "createdBy": {
+                      "id": 1,
+                      "displayName": "הורה לדוגמה",
+                      "role": "PARENT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "נתונים לא תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "הנתונים שנשלחו לא תקינים",
+                    "details": [
+                      {
+                        "field": "title",
+                        "message": "שם הפעילות: לפחות 2 תווים"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "המשתמש אינו הורה, או שהרעיון לא של ילד שלו",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "אפשר לאשר רק רעיונות של הילדים שלך"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "לא נמצא",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "הפעילות לא נמצאה"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "הפעילות כבר מאושרת",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "ALREADY_APPROVED",
+                    "message": "הפעילות כבר מאושרת"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/children": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "הילדים שלי",
+        "description": "להורה בלבד. מחזיר את הילדים שנרשמו עם שם המשתמש של ההורה.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת הילדים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Child"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "children": [
+                    {
+                      "id": 2,
+                      "username": "child_demo",
+                      "displayName": "יוסי",
+                      "createdAt": "2026-10-22T10:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "לא מחובר, או Token לא תקין / פג תוקף",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "נדרשת התחברות (Bearer Token)"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "המשתמש אינו הורה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "הפעולה מותרת רק להורה"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "הדביקי כאן את ה־token שקיבלת ב־login (בלי המילה Bearer)."
+      }
+    },
+    "schemas": {
+      "Role": {
+        "type": "string",
+        "enum": [
+          "PARENT",
+          "CHILD"
+        ],
+        "description": "PARENT = הורה, CHILD = ילד"
+      },
+      "Category": {
+        "type": "string",
+        "enum": [
+          "CRAFT",
+          "GAME",
+          "MOVEMENT",
+          "THINKING",
+          "KITCHEN"
+        ],
+        "description": "יצירה / משחק / תנועה / חשיבה / מטבח"
+      },
+      "Location": {
+        "type": "string",
+        "enum": [
+          "HOME",
+          "OUTDOOR"
+        ],
+        "description": "בבית / בחוץ"
+      },
+      "Cost": {
+        "type": "string",
+        "enum": [
+          "FREE",
+          "PAID"
+        ],
+        "description": "חינם / בתשלום"
+      },
+      "ActivityStatus": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "APPROVED"
+        ],
+        "description": "ממתין לאישור / מאושר"
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error"
+            ]
+          },
+          "database": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error"
+            ]
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "displayName",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "parentId": {
+            "type": "integer",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Me": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/User"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "parent": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Child": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RegisterInput": {
+        "type": "object",
+        "required": [
+          "username",
+          "password",
+          "displayName",
+          "role"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_]{3,30}$",
+            "description": "3–30 תווים: אותיות באנגלית, ספרות וקו תחתון. נשמר באותיות קטנות."
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 100
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "parentUsername": {
+            "type": "string",
+            "description": "חובה לילד: שם המשתמש של ההורה"
+          }
+        }
+      },
+      "LoginInput": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityInput": {
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "category",
+          "location",
+          "minAge",
+          "maxAge",
+          "durationMinutes",
+          "cost"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 2000
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "minAge": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 18
+          },
+          "maxAge": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 18,
+            "description": "גדול או שווה ל־minAge"
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "cost": {
+            "$ref": "#/components/schemas/Cost"
+          },
+          "isPublic": {
+            "type": "boolean",
+            "default": false,
+            "description": "להורה בלבד"
+          }
+        }
+      },
+      "ApproveInput": {
+        "type": "object",
+        "properties": {
+          "isPublic": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "Activity": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "category",
+          "location",
+          "minAge",
+          "maxAge",
+          "durationMinutes",
+          "cost",
+          "isPublic",
+          "status",
+          "familyId",
+          "createdAt",
+          "updatedAt",
+          "createdBy"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "minAge": {
+            "type": "integer"
+          },
+          "maxAge": {
+            "type": "integer"
+          },
+          "durationMinutes": {
+            "type": "integer"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/Cost"
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityStatus"
+          },
+          "familyId": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "role": {
+                "$ref": "#/components/schemas/Role"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
