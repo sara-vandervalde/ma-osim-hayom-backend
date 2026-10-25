@@ -5,6 +5,7 @@ services:
     name: ma-osim-hayom-api
     runtime: node
     plan: free
+    region: frankfurt # קרוב לישראל, ובאותו אזור של מסד הנתונים ב־Neon
     buildCommand: npm install --include=dev && npx prisma generate && npm run build
     # בהפעלה: מריצים Migrations, יוצרים נתוני הדגמה (רק אם SEED_ON_START=true) ומפעילים את השרת
     startCommand: npm start
